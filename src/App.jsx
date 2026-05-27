@@ -27,7 +27,7 @@ import {
 import { exportLeadsCsv } from "./lib/csv";
 
 const KEY_STORE = "leadmap.googleApiKey";
-const BUILD = "build 13"; // bump on each deploy so we can confirm what's live
+const BUILD = "build 14"; // bump on each deploy so we can confirm what's live
 
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORE) || "");
@@ -142,11 +142,6 @@ export default function App() {
     }
   }
 
-  const unverifiedCount = useMemo(
-    () => visibleLeads.filter((l) => !l.verified).length,
-    [visibleLeads]
-  );
-
   function handleSave(lead) {
     saveLead(lead);
     refreshSaved();
@@ -187,6 +182,11 @@ export default function App() {
   }, [results]);
 
   const soldCount = pipeline.filter((l) => l.outreach === OUTREACH.SOLD).length;
+
+  const unverifiedCount = useMemo(
+    () => visibleLeads.filter((l) => !l.verified).length,
+    [visibleLeads]
+  );
 
   // Explain an empty list instead of showing a blank panel.
   const emptyHint = useMemo(() => {
