@@ -128,6 +128,16 @@ export default function App() {
 
   const soldCount = pipeline.filter((l) => l.outreach === OUTREACH.SOLD).length;
 
+  // Explain an empty list instead of showing a blank panel.
+  const emptyHint = useMemo(() => {
+    if (visibleLeads.length) return null;
+    if (view === "pipeline")
+      return "No saved leads yet. Save businesses from your search results to build your pipeline.";
+    if (results.length && weakOnly)
+      return `All ${results.length} businesses found here already have a website, so none qualify as weak-presence leads. Tap “Showing all” to see them anyway — or try a category more likely to lack a site (barbers, nail salons, auto repair, florists) or a less corporate area.`;
+    return "No results yet. Run a search above to find businesses.";
+  }, [visibleLeads.length, view, results.length, weakOnly]);
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -289,6 +299,7 @@ export default function App() {
               onSave={handleSave}
               onUpdate={handleUpdate}
               onRemove={handleRemove}
+              emptyHint={emptyHint}
             />
           </div>
           <div className="h-[72vh] overflow-hidden rounded-2xl border border-slate-200 shadow-card">

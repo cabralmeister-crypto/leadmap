@@ -20,13 +20,15 @@ export default function LeadList({
   onSave,
   onUpdate,
   onRemove,
+  emptyHint,
 }) {
   if (!leads.length) {
     return (
-      <div className="px-6 py-16 text-center text-sm text-slate-400">
-        {mode === "pipeline"
-          ? "No saved leads yet. Save businesses from your search results to start your pipeline."
-          : "No results. Try a search above."}
+      <div className="px-8 py-16 text-center text-sm leading-relaxed text-slate-500">
+        {emptyHint ||
+          (mode === "pipeline"
+            ? "No saved leads yet. Save businesses from your search results to start your pipeline."
+            : "No results. Try a search above.")}
       </div>
     );
   }
