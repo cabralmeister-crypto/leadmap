@@ -20,18 +20,17 @@ const RADIUS_OPTIONS = [
 ];
 
 export default function SearchBar({ onSearch, onNearMe, busy }) {
-  const [category, setCategory] = useState("Coffee shops");
+  const [category, setCategory] = useState(""); // blank = all businesses
   const [location, setLocation] = useState("West Loop, Chicago, IL");
   const [radius, setRadius] = useState(3218);
 
   function submit(e) {
     e.preventDefault();
-    if (!category.trim() || !location.trim()) return;
+    if (!location.trim()) return;
     onSearch({ category: category.trim(), location: location.trim(), radiusMeters: radius });
   }
 
   function nearMe() {
-    if (!category.trim()) return;
     onNearMe({ category: category.trim(), radiusMeters: radius });
   }
 
@@ -43,7 +42,7 @@ export default function SearchBar({ onSearch, onNearMe, busy }) {
           <input
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            placeholder="Business type (e.g. dentists)"
+            placeholder="All businesses — or narrow (e.g. coffee shops)"
             className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-9 pr-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
           />
         </label>
@@ -73,7 +72,7 @@ export default function SearchBar({ onSearch, onNearMe, busy }) {
           className="flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          {busy ? "Searching…" : "Find leads"}
+          {busy ? "Scanning…" : "Scan area"}
         </button>
       </div>
 
@@ -86,7 +85,18 @@ export default function SearchBar({ onSearch, onNearMe, busy }) {
         >
           <LocateFixed className="h-3.5 w-3.5" /> Near me
         </button>
-        <span className="mr-1 text-xs text-slate-400">or browse:</span>
+        <span className="mr-1 text-xs text-slate-400">narrow to:</span>
+        <button
+          type="button"
+          onClick={() => setCategory("")}
+          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+            category === ""
+              ? "bg-brand-600 text-white"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          All businesses
+        </button>
         {CATEGORY_PRESETS.map((c) => (
           <button
             key={c}

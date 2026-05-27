@@ -11,7 +11,7 @@ import {
 import SearchBar from "./components/SearchBar";
 import MapView from "./components/MapView";
 import LeadList from "./components/LeadList";
-import { searchByArea, searchNearMe, getCurrentLocation } from "./lib/places";
+import { findAreaCenter, scanArea, getCurrentLocation } from "./lib/places";
 import { mockResults, mockCenter } from "./lib/mock";
 import { PRESENCE, PRESENCE_META } from "./lib/classify";
 import {
@@ -40,6 +40,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [demo, setDemo] = useState(false);
+  const [progress, setProgress] = useState(null); // { done, total, found }
 
   const demoMode = !apiKey;
 
@@ -57,38 +58,11 @@ export default function App() {
     setSavedMap(getSavedMap());
   }
 
-  async function handleSearch({ category, location, radiusMeters }) {
+  // Shared scan runner — center comes from a typed area or the device GPS.
+  async function runScan({ category, radiusMeters, getCenter }) {
     setError("");
     setBusy(true);
-    try {
-      if (demoMode) {
-        // No key yet — load sample data so the workflow is usable.
-        setCenter(mockCenter);
-        setResults(mockResults);
-        setDemo(true);
-        setView("results");
-      } else {
-        const { results: found, center: c } = await searchByArea(apiKey, {
-          category,
-          location,
-        });
-        setCenter(c);
-        setResults(found);
-        setDemo(false);
-        setView("results");
-        if (!found.length)
-          setError("No businesses found there. Try different terms or use 📍 Near me.");
-      }
-    } catch (e) {
-      setError(e.message || "Search failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleNearMe({ category, radiusMeters }) {
-    setError("");
-    setBusy(true);
+    setProgress({ done: 0, total: 0, found: 0 });
     try {
       if (demoMode) {
         setCenter(mockCenter);
@@ -97,25 +71,38 @@ export default function App() {
         setView("results");
         return;
       }
-      const loc = await getCurrentLocation();
-      const { results: found } = await searchNearMe(apiKey, {
-        category,
-        center: loc,
+      const c = await getCenter();
+      const { results: found } = await scanArea(apiKey, {
+        center: c,
         radiusMeters,
+        category,
+        onProgress: (done, total, foundCount) =>
+          setProgress({ done, total, found: foundCount }),
       });
-      setCenter(loc);
+      setCenter(c);
       setResults(found);
       setDemo(false);
       setView("results");
       if (!found.length)
-        setError(
-          "No matching businesses found nearby. Try a wider radius or a broader term."
-        );
+        setError("No businesses found in that area. Try a wider radius.");
     } catch (e) {
-      setError(e.message || "Location search failed.");
+      setError(e.message || "Scan failed.");
     } finally {
       setBusy(false);
+      setProgress(null);
     }
+  }
+
+  function handleSearch({ category, location, radiusMeters }) {
+    runScan({
+      category,
+      radiusMeters,
+      getCenter: () => findAreaCenter(apiKey, location),
+    });
+  }
+
+  function handleNearMe({ category, radiusMeters }) {
+    runScan({ category, radiusMeters, getCenter: getCurrentLocation });
   }
 
   function handleSave(lead) {
@@ -254,6 +241,30 @@ export default function App() {
 
       <main className="mx-auto max-w-7xl px-5 py-6">
         <SearchBar onSearch={handleSearch} onNearMe={handleNearMe} busy={busy} />
+
+        {progress && (
+          <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm text-brand-800">
+            <div className="flex items-center justify-between">
+              <span>
+                Scanning the area for every business…{" "}
+                {progress.total
+                  ? `zone ${progress.done}/${progress.total}`
+                  : "starting"}{" "}
+                · <b>{progress.found}</b> found
+              </span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-brand-100">
+              <div
+                className="h-full bg-brand-600 transition-all"
+                style={{
+                  width: progress.total
+                    ? `${(progress.done / progress.total) * 100}%`
+                    : "8%",
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {demo && (
           <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
