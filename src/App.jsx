@@ -11,7 +11,7 @@ import {
 import SearchBar from "./components/SearchBar";
 import MapView from "./components/MapView";
 import LeadList from "./components/LeadList";
-import { searchBusinesses } from "./lib/places";
+import { searchByArea, searchNearMe, getCurrentLocation } from "./lib/places";
 import { mockResults, mockCenter } from "./lib/mock";
 import { PRESENCE, PRESENCE_META } from "./lib/classify";
 import {
@@ -68,20 +68,51 @@ export default function App() {
         setDemo(true);
         setView("results");
       } else {
-        const { results: found, center: c } = await searchBusinesses(apiKey, {
+        const { results: found, center: c } = await searchByArea(apiKey, {
           category,
           location,
-          radiusMeters,
         });
         setCenter(c);
         setResults(found);
         setDemo(false);
         setView("results");
         if (!found.length)
-          setError("No businesses found there. Try a wider radius or different terms.");
+          setError("No businesses found there. Try different terms or use 📍 Near me.");
       }
     } catch (e) {
       setError(e.message || "Search failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleNearMe({ category, radiusMeters }) {
+    setError("");
+    setBusy(true);
+    try {
+      if (demoMode) {
+        setCenter(mockCenter);
+        setResults(mockResults);
+        setDemo(true);
+        setView("results");
+        return;
+      }
+      const loc = await getCurrentLocation();
+      const { results: found } = await searchNearMe(apiKey, {
+        category,
+        center: loc,
+        radiusMeters,
+      });
+      setCenter(loc);
+      setResults(found);
+      setDemo(false);
+      setView("results");
+      if (!found.length)
+        setError(
+          "No matching businesses found nearby. Try a wider radius or a broader term."
+        );
+    } catch (e) {
+      setError(e.message || "Location search failed.");
     } finally {
       setBusy(false);
     }
@@ -222,7 +253,7 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-7xl px-5 py-6">
-        <SearchBar onSearch={handleSearch} busy={busy} />
+        <SearchBar onSearch={handleSearch} onNearMe={handleNearMe} busy={busy} />
 
         {demo && (
           <div className="mt-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">

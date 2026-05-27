@@ -1,8 +1,12 @@
 // Client-side Google Places (New) integration. Runs entirely in the browser
 // with an HTTP-referrer-restricted Maps JS key — no backend or secret needed.
-// Uses ONLY the Places API (New) + Maps JavaScript API (no Geocoding API):
-// the location is folded into the text query and the map center is derived
-// from the results, so there are fewer APIs to enable and fewer ways to break.
+// Uses only the Places API (New) + Maps JavaScript API (no Geocoding API).
+//
+// Two search modes:
+//   • Text   — "coffee shops in West Loop" → up to 20 most prominent results.
+//   • Nearby — closest businesses to a GPS point, ranked by DISTANCE. This is
+//     how we surface tiny, low-prominence shops with no website ("down the
+//     street") that text search buries past result #20.
 import { classifyPresence } from "./classify";
 
 let mapsPromise = null;
@@ -37,32 +41,101 @@ const FIELDS = [
   "primaryType",
 ];
 
-// Search businesses by category within a named area. Returns { results, center }.
-export async function searchBusinesses(apiKey, { category, location, radiusMeters }) {
+// Common categories → Google place types (so Nearby Search can target them).
+const TYPE_MAP = {
+  "coffee shop": ["coffee_shop", "cafe"],
+  coffee: ["coffee_shop", "cafe"],
+  cafe: ["cafe", "coffee_shop"],
+  barber: ["barber_shop"],
+  barbers: ["barber_shop"],
+  barbershop: ["barber_shop"],
+  "hair salon": ["hair_salon", "beauty_salon"],
+  "hair salons": ["hair_salon", "beauty_salon"],
+  salon: ["beauty_salon", "hair_salon"],
+  "nail salon": ["nail_salon"],
+  "nail salons": ["nail_salon"],
+  "auto repair": ["car_repair"],
+  mechanic: ["car_repair"],
+  restaurant: ["restaurant"],
+  restaurants: ["restaurant"],
+  dentist: ["dentist"],
+  dentists: ["dentist"],
+  plumber: ["plumber"],
+  plumbers: ["plumber"],
+  florist: ["florist"],
+  florists: ["florist"],
+  bakery: ["bakery"],
+  bakeries: ["bakery"],
+  "dry cleaner": ["laundry"],
+  "dry cleaners": ["laundry"],
+  chiropractor: ["chiropractor"],
+  chiropractors: ["chiropractor"],
+  "law firm": ["lawyer"],
+  "law firms": ["lawyer"],
+  lawyer: ["lawyer"],
+};
+
+function typesFor(category) {
+  return TYPE_MAP[category.trim().toLowerCase()] || null;
+}
+
+// ---- public API ----------------------------------------------------------
+
+// Prominence search over a named area. Returns { results, center }.
+export async function searchByArea(apiKey, { category, location }) {
   await loadMaps(apiKey);
   const { Place } = await google.maps.importLibrary("places");
-
   const textQuery = location ? `${category} in ${location}` : category;
   const { places } = await Place.searchByText({
     textQuery,
     fields: FIELDS,
     maxResultCount: 20,
   });
+  const results = (places || []).map(normalize).filter((r) => r.lat != null);
+  return { results, center: centroid(results) };
+}
 
+// Closest businesses to a GPS point, ranked by distance. Returns { results }.
+export async function searchNearMe(apiKey, { category, center, radiusMeters }) {
+  await loadMaps(apiKey);
+  const { Place, SearchNearbyRankPreference } = await google.maps.importLibrary(
+    "places"
+  );
+  const types = typesFor(category);
+
+  const request = {
+    fields: FIELDS,
+    locationRestriction: {
+      center: { lat: center.lat, lng: center.lng },
+      radius: Math.min(radiusMeters || 3000, 50000),
+    },
+    maxResultCount: 20,
+    rankPreference: SearchNearbyRankPreference.DISTANCE,
+  };
+  if (types) request.includedPrimaryTypes = types;
+
+  const { places } = await Place.searchNearby(request);
   let results = (places || []).map(normalize).filter((r) => r.lat != null);
-  const center = centroid(results);
 
-  // Keep results within the chosen radius of the result cluster's center.
-  if (center && radiusMeters) {
-    results = results.filter((r) => metersBetween(center, r) <= radiusMeters);
+  // If the category wasn't a known type, keep only businesses whose name/type
+  // loosely matches what the user typed.
+  if (!types) {
+    const needle = category.trim().toLowerCase();
+    results = results.filter(
+      (r) =>
+        r.name.toLowerCase().includes(needle) ||
+        r.category.toLowerCase().includes(needle)
+    );
   }
   return { results, center };
 }
 
+// ---- helpers -------------------------------------------------------------
+
 function normalize(place) {
   const website = place.websiteURI || "";
   return {
-    placeId: place.id, // always present on a Place, no need to request it
+    placeId: place.id,
     name: place.displayName || "(unnamed)",
     address: place.formattedAddress || "",
     phone: place.nationalPhoneNumber || "",
@@ -84,21 +157,25 @@ function prettyType(t) {
 
 function centroid(list) {
   if (!list.length) return null;
-  const sum = list.reduce((a, r) => ({ lat: a.lat + r.lat, lng: a.lng + r.lng }), {
+  const s = list.reduce((a, r) => ({ lat: a.lat + r.lat, lng: a.lng + r.lng }), {
     lat: 0,
     lng: 0,
   });
-  return { lat: sum.lat / list.length, lng: sum.lng / list.length };
+  return { lat: s.lat / list.length, lng: s.lng / list.length };
 }
 
-function metersBetween(a, b) {
-  const R = 6371000;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
+// Get the browser's current GPS position.
+export function getCurrentLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation)
+      return reject(new Error("This device doesn't support location."));
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () =>
+        reject(
+          new Error("Couldn't get your location — allow location access and try again.")
+        ),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
 }

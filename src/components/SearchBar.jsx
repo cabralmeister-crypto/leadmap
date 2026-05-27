@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { Search, MapPin, Loader2 } from "lucide-react";
+import { Search, MapPin, Loader2, LocateFixed } from "lucide-react";
 
 const CATEGORY_PRESETS = [
-  "Dentists",
+  "Coffee shops",
+  "Barbers",
   "Hair salons",
+  "Nail salons",
   "Auto repair",
   "Restaurants",
-  "Plumbers",
-  "Chiropractors",
-  "Nail salons",
-  "Law firms",
+  "Florists",
+  "Dentists",
 ];
 
 const RADIUS_OPTIONS = [
@@ -19,8 +19,8 @@ const RADIUS_OPTIONS = [
   { label: "10 mi", meters: 16093 },
 ];
 
-export default function SearchBar({ onSearch, busy }) {
-  const [category, setCategory] = useState("Dentists");
+export default function SearchBar({ onSearch, onNearMe, busy }) {
+  const [category, setCategory] = useState("Coffee shops");
   const [location, setLocation] = useState("West Loop, Chicago, IL");
   const [radius, setRadius] = useState(3218);
 
@@ -28,6 +28,11 @@ export default function SearchBar({ onSearch, busy }) {
     e.preventDefault();
     if (!category.trim() || !location.trim()) return;
     onSearch({ category: category.trim(), location: location.trim(), radiusMeters: radius });
+  }
+
+  function nearMe() {
+    if (!category.trim()) return;
+    onNearMe({ category: category.trim(), radiusMeters: radius });
   }
 
   return (
@@ -72,7 +77,16 @@ export default function SearchBar({ onSearch, busy }) {
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={nearMe}
+          disabled={busy}
+          className="flex items-center gap-1.5 rounded-full bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
+        >
+          <LocateFixed className="h-3.5 w-3.5" /> Near me
+        </button>
+        <span className="mr-1 text-xs text-slate-400">or browse:</span>
         {CATEGORY_PRESETS.map((c) => (
           <button
             key={c}
