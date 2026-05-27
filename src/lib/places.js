@@ -235,12 +235,14 @@ function prettyType(t) {
 }
 
 // Build a grid of scan points covering a circle, clipped to that circle.
-// Cell count is capped so a scan stays affordable (max 5x5 = 25 lookups).
+// Cells fully overlap (tileRadius ≥ half the cell diagonal) so coverage is
+// continuous — no gaps that make results look "gridded". Denser for tighter
+// radii where comprehensive coverage matters most; capped to bound API cost.
 function buildGrid(center, radiusMeters) {
-  const R = Math.min(radiusMeters || 2000, 16000);
-  const N = R <= 1700 ? 3 : R <= 3500 ? 4 : 5; // tiles per axis
+  const R = Math.min(radiusMeters || 1609, 16000);
+  const N = R <= 1200 ? 5 : 6; // tiles per axis (25–36 cells before clipping)
   const step = (2 * R) / N;
-  const tileRadius = Math.round(step * 0.8); // slight overlap between cells
+  const tileRadius = Math.round(step * 0.75); // ≥ step/√2 → cells overlap, no gaps
 
   const mPerDegLat = 111320;
   const mPerDegLng = 111320 * Math.cos((center.lat * Math.PI) / 180);

@@ -25,6 +25,7 @@ import {
 import { exportLeadsCsv } from "./lib/csv";
 
 const KEY_STORE = "leadmap.googleApiKey";
+const BUILD = "build 9"; // bump on each deploy so we can confirm what's live
 
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORE) || "");
@@ -170,7 +171,8 @@ export default function App() {
                 LeadMap
               </h1>
               <p className="text-xs text-slate-500">
-                Find businesses with no web presence
+                Find businesses with no web presence ·{" "}
+                <span className="font-semibold text-brand-600">{BUILD}</span>
               </p>
             </div>
           </div>
