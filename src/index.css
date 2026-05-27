@@ -1,0 +1,22 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+@import "leaflet/dist/leaflet.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: "Inter", system-ui, sans-serif;
+  color: #1e1b4b;
+  background: #f8fafc;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Leaflet must have an explicit height */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #e2e8f0;
+  font-family: inherit;
+}
