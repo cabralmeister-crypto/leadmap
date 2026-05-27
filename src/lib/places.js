@@ -103,6 +103,8 @@ export async function scanArea(
 
   const seen = new Map();
   let done = 0;
+  let failed = 0;
+  let lastError = null;
 
   const runCell = async (pt) => {
     const request = {
@@ -117,8 +119,9 @@ export async function scanArea(
       (places || []).forEach((p) => {
         if (p?.id && !seen.has(p.id)) seen.set(p.id, normalize(p));
       });
-    } catch {
-      /* skip a failed cell, keep scanning */
+    } catch (e) {
+      failed += 1;
+      lastError = e;
     } finally {
       done += 1;
       onProgress?.(done, points.length, seen.size);
@@ -129,6 +132,16 @@ export async function scanArea(
   const BATCH = 4;
   for (let i = 0; i < points.length; i += BATCH) {
     await Promise.all(points.slice(i, i + BATCH).map(runCell));
+  }
+
+  // If every lookup failed, that's a config problem (key/API), not an empty
+  // area — surface the real Google error instead of "no businesses found".
+  if (failed === points.length && lastError) {
+    throw new Error(
+      "Google rejected the search: " +
+        (lastError.message || lastError) +
+        " — check that Places API (New) is enabled and your key allows this site."
+    );
   }
 
   let results = [...seen.values()].filter(
