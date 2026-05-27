@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   MapPinned,
   KeyRound,
@@ -12,6 +12,7 @@ import SearchBar from "./components/SearchBar";
 import MapView from "./components/MapView";
 import LeadList from "./components/LeadList";
 import { findAreaCenter, scanArea, getCurrentLocation } from "./lib/places";
+import { scanOSM, geocodeOSM } from "./lib/osm";
 import { mockResults, mockCenter } from "./lib/mock";
 import { PRESENCE, PRESENCE_META } from "./lib/classify";
 import {
@@ -25,7 +26,7 @@ import {
 import { exportLeadsCsv } from "./lib/csv";
 
 const KEY_STORE = "leadmap.googleApiKey";
-const BUILD = "build 10"; // bump on each deploy so we can confirm what's live
+const BUILD = "build 11"; // bump on each deploy so we can confirm what's live
 
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORE) || "");
@@ -42,18 +43,9 @@ export default function App() {
   const [error, setError] = useState("");
   const [demo, setDemo] = useState(false);
   const [progress, setProgress] = useState(null); // { done, total, found }
+  const [source, setSource] = useState("osm"); // "osm" (free) | "google"
 
-  const demoMode = !apiKey;
-
-  // Preview sample data on first load (until a real key + search is used).
-  useEffect(() => {
-    if (demoMode) {
-      setCenter(mockCenter);
-      setResults(mockResults);
-      setDemo(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const demoMode = source === "google" && !apiKey;
 
   function refreshSaved() {
     setSavedMap(getSavedMap());
@@ -72,15 +64,19 @@ export default function App() {
         setView("results");
         return;
       }
+      const onProgress = (done, total, found) =>
+        setProgress({ done, total, found });
       const c = await getCenter();
-      const { results: found } = await scanArea(apiKey, {
-        center: c,
-        radiusMeters,
-        category,
-        deep,
-        onProgress: (done, total, foundCount) =>
-          setProgress({ done, total, found: foundCount }),
-      });
+      const { results: found } =
+        source === "osm"
+          ? await scanOSM({ center: c, radiusMeters, category, onProgress })
+          : await scanArea(apiKey, {
+              center: c,
+              radiusMeters,
+              category,
+              deep,
+              onProgress,
+            });
       setCenter(c);
       setResults(found);
       setDemo(false);
@@ -100,7 +96,8 @@ export default function App() {
       category,
       radiusMeters,
       deep,
-      getCenter: () => findAreaCenter(apiKey, location),
+      getCenter: () =>
+        source === "osm" ? geocodeOSM(location) : findAreaCenter(apiKey, location),
     });
   }
 
@@ -180,7 +177,11 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
-            {demoMode ? (
+            {source === "osm" ? (
+              <span className="hidden items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 sm:inline-flex">
+                ● OpenStreetMap · free
+              </span>
+            ) : demoMode ? (
               <span className="hidden items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 sm:inline-flex">
                 <FlaskConical className="h-3.5 w-3.5" /> Demo data
               </span>
@@ -189,16 +190,18 @@ export default function App() {
                 ● Live (Google)
               </span>
             )}
-            <button
-              onClick={() => {
-                setKeyDraft(apiKey);
-                setShowKeyPanel((v) => !v);
-              }}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              <KeyRound className="h-3.5 w-3.5" />
-              {apiKey ? "API key" : "Add API key"}
-            </button>
+            {source === "google" && (
+              <button
+                onClick={() => {
+                  setKeyDraft(apiKey);
+                  setShowKeyPanel((v) => !v);
+                }}
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+                {apiKey ? "API key" : "Add API key"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -244,7 +247,13 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-7xl px-5 py-6">
-        <SearchBar onSearch={handleSearch} onNearMe={handleNearMe} busy={busy} />
+        <SearchBar
+          onSearch={handleSearch}
+          onNearMe={handleNearMe}
+          busy={busy}
+          source={source}
+          onSourceChange={setSource}
+        />
 
         {progress && (
           <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm text-brand-800">

@@ -19,7 +19,7 @@ const RADIUS_OPTIONS = [
   { label: "10 mi", meters: 16093 },
 ];
 
-export default function SearchBar({ onSearch, onNearMe, busy }) {
+export default function SearchBar({ onSearch, onNearMe, busy, source, onSourceChange }) {
   const [category, setCategory] = useState(""); // blank = all businesses
   const [location, setLocation] = useState("West Loop, Chicago, IL");
   const [radius, setRadius] = useState(3218);
@@ -37,6 +37,35 @@ export default function SearchBar({ onSearch, onNearMe, busy }) {
 
   return (
     <form onSubmit={submit} className="space-y-3">
+      <div className="flex items-center gap-2 text-xs">
+        <span className="font-medium text-slate-500">Data source:</span>
+        <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+          <button
+            type="button"
+            onClick={() => onSourceChange("osm")}
+            className={`rounded-md px-3 py-1 font-semibold transition-colors ${
+              source === "osm" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500"
+            }`}
+          >
+            OpenStreetMap · free
+          </button>
+          <button
+            type="button"
+            onClick={() => onSourceChange("google")}
+            className={`rounded-md px-3 py-1 font-semibold transition-colors ${
+              source === "google" ? "bg-white text-brand-700 shadow-sm" : "text-slate-500"
+            }`}
+          >
+            Google (needs key)
+          </button>
+        </div>
+        <span className="hidden text-slate-400 sm:inline">
+          {source === "osm"
+            ? "complete coverage, no cap, no key"
+            : "accurate websites, ~20/lookup, paid"}
+        </span>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-[1.2fr_1.4fr_auto_auto]">
         <label className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -113,16 +142,18 @@ export default function SearchBar({ onSearch, onNearMe, busy }) {
           </button>
         ))}
 
-        <label className="ml-auto flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600">
-          <input
-            type="checkbox"
-            checked={deep}
-            onChange={(e) => setDeep(e.target.checked)}
-            className="h-3.5 w-3.5 accent-brand-600"
-          />
-          Deep scan
-          <span className="text-slate-400">(more thorough, more lookups)</span>
-        </label>
+        {source === "google" && (
+          <label className="ml-auto flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600">
+            <input
+              type="checkbox"
+              checked={deep}
+              onChange={(e) => setDeep(e.target.checked)}
+              className="h-3.5 w-3.5 accent-brand-600"
+            />
+            Deep scan
+            <span className="text-slate-400">(more thorough, more lookups)</span>
+          </label>
+        )}
       </div>
     </form>
   );
