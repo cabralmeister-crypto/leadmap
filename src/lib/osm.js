@@ -49,7 +49,7 @@ export async function geocodeOSM(location) {
 export async function scanOSM({ center, radiusMeters, category, onProgress }) {
   const { s, w, n, e } = radiusToBbox(center, Math.min(radiusMeters || 1609, 16000));
   const bbox = `${s},${w},${n},${e}`;
-  const q = `[out:json][timeout:50];
+  const q = `[out:json][timeout:25];
 (
   nwr["name"]["shop"](${bbox});
   nwr["name"]["amenity"](${bbox});
@@ -63,20 +63,31 @@ out tags center;`;
   let data = null;
   let lastErr = null;
   for (const endpoint of OVERPASS_ENDPOINTS) {
+    // Abandon a slow/hung mirror after 25s and try the next one.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25000);
     try {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: "data=" + encodeURIComponent(q),
+        signal: controller.signal,
       });
       if (!res.ok) throw new Error("OpenStreetMap server returned " + res.status);
       data = await res.json();
       break;
     } catch (err) {
-      lastErr = err;
+      lastErr = err.name === "AbortError" ? new Error("a mirror timed out") : err;
+    } finally {
+      clearTimeout(timer);
     }
   }
-  if (!data) throw new Error("OpenStreetMap query failed: " + (lastErr?.message || "unknown"));
+  if (!data)
+    throw new Error(
+      "OpenStreetMap is busy right now (" +
+        (lastErr?.message || "unknown") +
+        "). Try a smaller radius or scan again in a moment."
+    );
 
   const cat = (category || "").trim().toLowerCase();
   const seen = new Map();

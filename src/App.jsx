@@ -26,7 +26,7 @@ import {
 import { exportLeadsCsv } from "./lib/csv";
 
 const KEY_STORE = "leadmap.googleApiKey";
-const BUILD = "build 11"; // bump on each deploy so we can confirm what's live
+const BUILD = "build 12"; // bump on each deploy so we can confirm what's live
 
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORE) || "");
