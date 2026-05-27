@@ -1,10 +1,12 @@
 // Client-side Google Places (New) integration. Runs entirely in the browser
 // with an HTTP-referrer-restricted Maps JS key — no backend or secret needed.
+// Uses ONLY the Places API (New) + Maps JavaScript API (no Geocoding API):
+// the location is folded into the text query and the map center is derived
+// from the results, so there are fewer APIs to enable and fewer ways to break.
 import { classifyPresence } from "./classify";
 
 let mapsPromise = null;
 
-// Load the Google Maps JS API (with Places library) once.
 export function loadMaps(apiKey) {
   if (window.google?.maps?.importLibrary) return Promise.resolve(window.google);
   if (mapsPromise) return mapsPromise;
@@ -23,19 +25,7 @@ export function loadMaps(apiKey) {
   return mapsPromise;
 }
 
-// Turn a location string ("West Loop, Chicago") into a center point.
-export async function geocode(apiKey, query) {
-  await loadMaps(apiKey);
-  const { Geocoder } = await google.maps.importLibrary("geocoding");
-  const geocoder = new Geocoder();
-  const { results } = await geocoder.geocode({ address: query });
-  if (!results?.length) throw new Error(`Couldn't find "${query}".`);
-  const loc = results[0].geometry.location;
-  return { lat: loc.lat(), lng: loc.lng(), label: results[0].formatted_address };
-}
-
 const FIELDS = [
-  "id",
   "displayName",
   "formattedAddress",
   "location",
@@ -43,32 +33,36 @@ const FIELDS = [
   "websiteURI",
   "rating",
   "userRatingCount",
-  "primaryTypeDisplayName",
   "businessStatus",
+  "primaryType",
 ];
 
-// Search businesses by free-text category, biased to a center + radius.
-export async function searchBusinesses(apiKey, { category, center, radiusMeters }) {
+// Search businesses by category within a named area. Returns { results, center }.
+export async function searchBusinesses(apiKey, { category, location, radiusMeters }) {
   await loadMaps(apiKey);
   const { Place } = await google.maps.importLibrary("places");
 
+  const textQuery = location ? `${category} in ${location}` : category;
   const { places } = await Place.searchByText({
-    textQuery: category,
+    textQuery,
     fields: FIELDS,
     maxResultCount: 20,
-    locationBias: {
-      center: { lat: center.lat, lng: center.lng },
-      radius: radiusMeters,
-    },
   });
 
-  return (places || []).map(normalize);
+  let results = (places || []).map(normalize).filter((r) => r.lat != null);
+  const center = centroid(results);
+
+  // Keep results within the chosen radius of the result cluster's center.
+  if (center && radiusMeters) {
+    results = results.filter((r) => metersBetween(center, r) <= radiusMeters);
+  }
+  return { results, center };
 }
 
 function normalize(place) {
   const website = place.websiteURI || "";
   return {
-    placeId: place.id,
+    placeId: place.id, // always present on a Place, no need to request it
     name: place.displayName || "(unnamed)",
     address: place.formattedAddress || "",
     phone: place.nationalPhoneNumber || "",
@@ -78,7 +72,33 @@ function normalize(place) {
     lng: place.location?.lng() ?? null,
     rating: place.rating ?? null,
     reviewCount: place.userRatingCount ?? 0,
-    category: place.primaryTypeDisplayName || "",
+    category: prettyType(place.primaryType),
     status: place.businessStatus || "",
   };
+}
+
+function prettyType(t) {
+  if (!t) return "";
+  return t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function centroid(list) {
+  if (!list.length) return null;
+  const sum = list.reduce((a, r) => ({ lat: a.lat + r.lat, lng: a.lng + r.lng }), {
+    lat: 0,
+    lng: 0,
+  });
+  return { lat: sum.lat / list.length, lng: sum.lng / list.length };
+}
+
+function metersBetween(a, b) {
+  const R = 6371000;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
 }

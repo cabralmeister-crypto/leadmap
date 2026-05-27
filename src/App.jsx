@@ -11,7 +11,7 @@ import {
 import SearchBar from "./components/SearchBar";
 import MapView from "./components/MapView";
 import LeadList from "./components/LeadList";
-import { geocode, searchBusinesses } from "./lib/places";
+import { searchBusinesses } from "./lib/places";
 import { mockResults, mockCenter } from "./lib/mock";
 import { PRESENCE, PRESENCE_META } from "./lib/classify";
 import {
@@ -68,10 +68,9 @@ export default function App() {
         setDemo(true);
         setView("results");
       } else {
-        const c = await geocode(apiKey, location);
-        const found = await searchBusinesses(apiKey, {
+        const { results: found, center: c } = await searchBusinesses(apiKey, {
           category,
-          center: c,
+          location,
           radiusMeters,
         });
         setCenter(c);
