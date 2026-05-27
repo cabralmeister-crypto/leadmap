@@ -25,7 +25,7 @@ import {
 import { exportLeadsCsv } from "./lib/csv";
 
 const KEY_STORE = "leadmap.googleApiKey";
-const BUILD = "build 9"; // bump on each deploy so we can confirm what's live
+const BUILD = "build 10"; // bump on each deploy so we can confirm what's live
 
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORE) || "");
@@ -60,7 +60,7 @@ export default function App() {
   }
 
   // Shared scan runner — center comes from a typed area or the device GPS.
-  async function runScan({ category, radiusMeters, getCenter }) {
+  async function runScan({ category, radiusMeters, deep, getCenter }) {
     setError("");
     setBusy(true);
     setProgress({ done: 0, total: 0, found: 0 });
@@ -77,6 +77,7 @@ export default function App() {
         center: c,
         radiusMeters,
         category,
+        deep,
         onProgress: (done, total, foundCount) =>
           setProgress({ done, total, found: foundCount }),
       });
@@ -94,16 +95,17 @@ export default function App() {
     }
   }
 
-  function handleSearch({ category, location, radiusMeters }) {
+  function handleSearch({ category, location, radiusMeters, deep }) {
     runScan({
       category,
       radiusMeters,
+      deep,
       getCenter: () => findAreaCenter(apiKey, location),
     });
   }
 
-  function handleNearMe({ category, radiusMeters }) {
-    runScan({ category, radiusMeters, getCenter: getCurrentLocation });
+  function handleNearMe({ category, radiusMeters, deep }) {
+    runScan({ category, radiusMeters, deep, getCenter: getCurrentLocation });
   }
 
   function handleSave(lead) {

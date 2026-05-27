@@ -121,14 +121,14 @@ export async function findAreaCenter(apiKey, location) {
 // onProgress(done, total, found) fires as each grid cell completes.
 export async function scanArea(
   apiKey,
-  { center, radiusMeters, category, onProgress }
+  { center, radiusMeters, category, deep, onProgress }
 ) {
   await loadMaps(apiKey);
   const { Place, SearchNearbyRankPreference } = await google.maps.importLibrary(
     "places"
   );
   const types = typesFor(category);
-  const { points, tileRadius } = buildGrid(center, radiusMeters);
+  const { points, tileRadius } = buildGrid(center, radiusMeters, deep);
 
   const seen = new Map();
   let done = 0;
@@ -238,9 +238,15 @@ function prettyType(t) {
 // Cells fully overlap (tileRadius ≥ half the cell diagonal) so coverage is
 // continuous — no gaps that make results look "gridded". Denser for tighter
 // radii where comprehensive coverage matters most; capped to bound API cost.
-function buildGrid(center, radiusMeters) {
+function buildGrid(center, radiusMeters, deep) {
   const R = Math.min(radiusMeters || 1609, 16000);
-  const N = R <= 1200 ? 5 : 6; // tiles per axis (25–36 cells before clipping)
+  // Deep scan packs in far more, smaller tiles so each one stays under Google's
+  // 20-result cap — that's what dissolves the lat/long grid into real coverage.
+  const N = deep
+    ? Math.max(8, Math.min(12, Math.round((2 * R) / 300)))
+    : R <= 1200
+      ? 5
+      : 6;
   const step = (2 * R) / N;
   const tileRadius = Math.round(step * 0.75); // ≥ step/√2 → cells overlap, no gaps
 

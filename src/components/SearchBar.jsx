@@ -23,15 +23,16 @@ export default function SearchBar({ onSearch, onNearMe, busy }) {
   const [category, setCategory] = useState(""); // blank = all businesses
   const [location, setLocation] = useState("West Loop, Chicago, IL");
   const [radius, setRadius] = useState(3218);
+  const [deep, setDeep] = useState(false);
 
   function submit(e) {
     e.preventDefault();
     if (!location.trim()) return;
-    onSearch({ category: category.trim(), location: location.trim(), radiusMeters: radius });
+    onSearch({ category: category.trim(), location: location.trim(), radiusMeters: radius, deep });
   }
 
   function nearMe() {
-    onNearMe({ category: category.trim(), radiusMeters: radius });
+    onNearMe({ category: category.trim(), radiusMeters: radius, deep });
   }
 
   return (
@@ -111,6 +112,17 @@ export default function SearchBar({ onSearch, onNearMe, busy }) {
             {c}
           </button>
         ))}
+
+        <label className="ml-auto flex cursor-pointer items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600">
+          <input
+            type="checkbox"
+            checked={deep}
+            onChange={(e) => setDeep(e.target.checked)}
+            className="h-3.5 w-3.5 accent-brand-600"
+          />
+          Deep scan
+          <span className="text-slate-400">(more thorough, more lookups)</span>
+        </label>
       </div>
     </form>
   );
