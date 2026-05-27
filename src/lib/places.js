@@ -192,6 +192,46 @@ export async function scanArea(
   return { results, center };
 }
 
+// Confirm the real website status of leads (e.g. OSM candidates) against
+// Google's more accurate data — one text lookup per lead, run in small batches.
+// Returns [{ placeId, website, found }].
+export async function verifyLeads(apiKey, leads, { onProgress } = {}) {
+  await loadMaps(apiKey);
+  const { Place } = await google.maps.importLibrary("places");
+  const out = [];
+  let done = 0;
+
+  const one = async (lead) => {
+    try {
+      const req = {
+        textQuery: `${lead.name} ${lead.address || ""}`.trim(),
+        fields: ["id", "websiteURI", "location"],
+        maxResultCount: 1,
+      };
+      if (lead.lat != null && lead.lng != null) {
+        req.locationBias = {
+          center: { lat: lead.lat, lng: lead.lng },
+          radius: 250,
+        };
+      }
+      const { places } = await Place.searchByText(req);
+      const p = places?.[0];
+      out.push({ placeId: lead.placeId, website: p?.websiteURI || "", found: !!p });
+    } catch {
+      out.push({ placeId: lead.placeId, website: lead.website, found: false });
+    } finally {
+      done += 1;
+      onProgress?.(done, leads.length);
+    }
+  };
+
+  const BATCH = 5;
+  for (let i = 0; i < leads.length; i += BATCH) {
+    await Promise.all(leads.slice(i, i + BATCH).map(one));
+  }
+  return out;
+}
+
 export function getCurrentLocation() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation)

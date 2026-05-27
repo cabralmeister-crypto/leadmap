@@ -55,6 +55,14 @@ export default function LeadList({
                   >
                     {meta.label}
                   </span>
+                  {lead.verified && (
+                    <span
+                      className="text-[10px] font-semibold text-emerald-600"
+                      title="Website status confirmed against Google"
+                    >
+                      ✓ Google-checked
+                    </span>
+                  )}
                   <h3 className="truncate font-semibold text-slate-900">
                     {lead.name}
                   </h3>

@@ -6,15 +6,16 @@ import {
   Filter,
   AlertCircle,
   FlaskConical,
+  BadgeCheck,
   X,
 } from "lucide-react";
 import SearchBar from "./components/SearchBar";
 import MapView from "./components/MapView";
 import LeadList from "./components/LeadList";
-import { findAreaCenter, scanArea, getCurrentLocation } from "./lib/places";
+import { findAreaCenter, scanArea, getCurrentLocation, verifyLeads } from "./lib/places";
 import { scanOSM, geocodeOSM } from "./lib/osm";
 import { mockResults, mockCenter } from "./lib/mock";
-import { PRESENCE, PRESENCE_META } from "./lib/classify";
+import { PRESENCE, PRESENCE_META, classifyPresence } from "./lib/classify";
 import {
   getSavedMap,
   saveLead,
@@ -26,7 +27,7 @@ import {
 import { exportLeadsCsv } from "./lib/csv";
 
 const KEY_STORE = "leadmap.googleApiKey";
-const BUILD = "build 12"; // bump on each deploy so we can confirm what's live
+const BUILD = "build 13"; // bump on each deploy so we can confirm what's live
 
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORE) || "");
@@ -104,6 +105,47 @@ export default function App() {
   function handleNearMe({ category, radiusMeters, deep }) {
     runScan({ category, radiusMeters, deep, getCenter: getCurrentLocation });
   }
+
+  // Confirm the top unverified leads against Google and drop false positives.
+  const VERIFY_BATCH = 100;
+  async function handleVerify() {
+    if (!apiKey) {
+      setError(
+        "Verification uses Google. Switch the source to Google (top of the search bar) and add your API key, then come back."
+      );
+      return;
+    }
+    const candidates = visibleLeads.filter((l) => !l.verified).slice(0, VERIFY_BATCH);
+    if (!candidates.length) return;
+    setError("");
+    setBusy(true);
+    setProgress({ done: 0, total: candidates.length, found: 0 });
+    try {
+      const out = await verifyLeads(apiKey, candidates, {
+        onProgress: (done, total) =>
+          setProgress({ done, total, found: 0, label: "Verifying leads against Google…" }),
+      });
+      const byId = new Map(out.map((o) => [o.placeId, o]));
+      setResults((prev) =>
+        prev.map((l) => {
+          const o = byId.get(l.placeId);
+          if (!o) return l;
+          const website = o.website || "";
+          return { ...l, website, presence: classifyPresence(website), verified: true };
+        })
+      );
+    } catch (e) {
+      setError(e.message || "Verification failed.");
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  }
+
+  const unverifiedCount = useMemo(
+    () => visibleLeads.filter((l) => !l.verified).length,
+    [visibleLeads]
+  );
 
   function handleSave(lead) {
     saveLead(lead);
@@ -259,11 +301,14 @@ export default function App() {
           <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm text-brand-800">
             <div className="flex items-center justify-between">
               <span>
-                Scanning the area for every business…{" "}
-                {progress.total
-                  ? `zone ${progress.done}/${progress.total}`
-                  : "starting"}{" "}
-                · <b>{progress.found}</b> found
+                {progress.label || "Scanning the area for every business…"}{" "}
+                {progress.total ? `${progress.done}/${progress.total}` : "starting"}
+                {progress.found ? (
+                  <>
+                    {" "}
+                    · <b>{progress.found}</b> found
+                  </>
+                ) : null}
               </span>
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-brand-100">
@@ -327,6 +372,17 @@ export default function App() {
               <Filter className="h-3.5 w-3.5" />
               {weakOnly ? "Weak presence only" : "Showing all"}
             </button>
+            {view === "results" && unverifiedCount > 0 && (
+              <button
+                onClick={handleVerify}
+                disabled={busy}
+                title="Confirm real website status against Google (top 100)"
+                className="flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-50"
+              >
+                <BadgeCheck className="h-3.5 w-3.5" /> Verify w/ Google (
+                {Math.min(unverifiedCount, VERIFY_BATCH)})
+              </button>
+            )}
             <button
               onClick={() =>
                 exportLeadsCsv(
