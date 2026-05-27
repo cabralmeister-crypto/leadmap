@@ -38,7 +38,36 @@ const FIELDS = [
   "userRatingCount",
   "businessStatus",
   "primaryType",
+  "types",
 ];
+
+// Place types that aren't sellable businesses — parks, restrooms, transit,
+// ATMs, worship, schools, government, etc. Filtered out of "all business" scans.
+const NON_BUSINESS_TYPES = new Set([
+  "park", "dog_park", "national_park", "state_park", "hiking_area", "beach",
+  "marina", "campground", "camping_cabin", "garden", "plaza", "playground",
+  "public_bathroom", "rest_stop", "toilet",
+  "bus_station", "bus_stop", "train_station", "subway_station", "transit_station",
+  "transit_depot", "light_rail_station", "ferry_terminal", "parking",
+  "airport", "international_airport", "heliport",
+  "atm",
+  "church", "hindu_temple", "mosque", "synagogue", "place_of_worship",
+  "school", "primary_school", "secondary_school", "preschool", "university",
+  "city_hall", "courthouse", "embassy", "fire_station", "police", "post_office",
+  "local_government_office", "government_office",
+  "cemetery", "funeral_home",
+  "monument", "historical_landmark", "tourist_attraction",
+  "hospital",
+]);
+
+// A result counts as a sellable business if its type isn't on the denylist and
+// it shows some commercial signal (a phone, a website, or customer reviews).
+function isSellableBusiness(r) {
+  const types = [r.primaryType, ...(r.types || [])].filter(Boolean);
+  if (types.some((t) => NON_BUSINESS_TYPES.has(t))) return false;
+  const hasSignal = r.phone || r.website || (r.reviewCount || 0) > 0;
+  return hasSignal;
+}
 
 // Optional: narrow a scan to a category by mapping it to Google place types.
 const TYPE_MAP = {
@@ -145,7 +174,10 @@ export async function scanArea(
   }
 
   let results = [...seen.values()].filter(
-    (r) => r.lat != null && (!r.status || r.status === "OPERATIONAL")
+    (r) =>
+      r.lat != null &&
+      (!r.status || r.status === "OPERATIONAL") &&
+      isSellableBusiness(r)
   );
 
   // If a category was typed but isn't in our type map, match it loosely.
@@ -191,6 +223,8 @@ function normalize(place) {
     rating: place.rating ?? null,
     reviewCount: place.userRatingCount ?? 0,
     category: prettyType(place.primaryType),
+    primaryType: place.primaryType || "",
+    types: place.types || [],
     status: place.businessStatus || "",
   };
 }
