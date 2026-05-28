@@ -108,6 +108,11 @@ out tags center;`;
     if (cat && !(`${t.name} ${kind}`.toLowerCase().includes(cat))) continue;
 
     const website = t.website || t["contact:website"] || t.url || "";
+    // OSM marks chain businesses with brand/operator tags. Chains always have
+    // corporate websites, so treat them as has-site (hidden from weak-presence)
+    // even if OSM doesn't list a URL.
+    const isChain = !!(t.brand || t["brand:wikidata"] || t.operator);
+    const presence = isChain ? "site" : classifyPresence(website);
     const key = `osm-${el.type}-${el.id}`;
     seen.set(key, {
       placeId: key,
@@ -115,12 +120,12 @@ out tags center;`;
       address: osmAddress(t),
       phone: t.phone || t["contact:phone"] || t["contact:mobile"] || "",
       website,
-      presence: classifyPresence(website),
+      presence,
       lat,
       lng,
       rating: null,
       reviewCount: 0,
-      category: kind,
+      category: isChain && t.brand ? `${kind} · ${t.brand}` : kind,
       status: "OPERATIONAL",
     });
   }
